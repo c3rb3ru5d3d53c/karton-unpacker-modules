@@ -39,6 +39,7 @@ class KartonUnpackerModule():
 
     def __init__(self, sample, config) -> None:
         self.enabled = self.yara_check(sample)
+        self.config = config
         if self.config['debug'] is True:
             logging.basicConfig(level=logging.DEBUG)
         else:
@@ -74,7 +75,7 @@ class KartonUnpackerModule():
             f.close()
             if os.path.exists(sample_unpacked):
                 os.remove(sample_unpacked)
-            return Task(
+            task = Task(
                 headers={
                     "type": "sample",
                     "kind": "raw"
@@ -86,7 +87,7 @@ class KartonUnpackerModule():
             )
             return [task]
         log.error(f"failed to unpack: {self.sample_packed.name}")
-        return None
+        return []
         
 if __name__ in '__main__':
     logging.basicConfig(level=logging.DEBUG)

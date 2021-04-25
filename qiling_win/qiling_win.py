@@ -287,7 +287,8 @@ class KartonUnpackerModule():
             tasks.append(Task(
                 headers={
                     'type': 'sample',
-                    'kind': 'raw'
+                    'kind': 'runnable',
+                    'stage': 'recognized'
                 },
                 payload={
                     'parent': Resource(name='sample', content=self.data),
