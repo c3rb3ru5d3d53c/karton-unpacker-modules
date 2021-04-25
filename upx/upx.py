@@ -15,8 +15,6 @@ log = logging.getLogger(__name__)
 __author__  = "c3rb3ru5"
 __version__ = "3.96"
 
-logging.basicConfig(level=logging.DEBUG)
-
 # YARA Signature to Detect UPX Packed Executables
 yara_rule = """
 rule upx{
@@ -39,8 +37,12 @@ class KartonUnpackerModule():
     Unpacks UPX Executables for the Karton Unpacker Service
     """
 
-    def __init__(self, sample) -> None:
+    def __init__(self, sample, config) -> None:
         self.enabled = self.yara_check(sample)
+        if self.config['debug'] is True:
+            logging.basicConfig(level=logging.DEBUG)
+        else:
+            logging.basicConfig(level=logging.INFO)
 
     def yara_check(self, sample) -> bool:
         self.yara = yara.compile(source=yara_rule)
@@ -82,7 +84,7 @@ class KartonUnpackerModule():
                     "sample": child_resource
                 }
             )
-            return task
+            return [task]
         log.error(f"failed to unpack: {self.sample_packed.name}")
         return None
         
