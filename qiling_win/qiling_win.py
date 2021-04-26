@@ -14,6 +14,7 @@ import argparse
 import capstone
 import hashlib
 from qiling import *
+from io import BytesIO
 from qiling.const import *
 from qiling.exception import *
 from qiling.os.const import *
@@ -285,17 +286,29 @@ class KartonUnpackerModule():
                 log.debug('EXTRACTED_PAYLOAD:')
                 hexdump.hexdump(memory_dump)
             tasks.append(Task(
-                headers={
-                    'type': 'sample',
-                    'kind': 'runnable',
-                    'stage': 'recognized'
-                },
+                headers=self.get_headers(memory_dump),
                 payload={
                     'parent': Resource(name='sample', content=self.data),
                     'sample': Resource(name='unpacked', content=memory_dump)
                 }
             ))
         return tasks
+
+    def get_headers(self, memory_dump):
+        headers = {
+            'type': 'sample',
+            'kind': 'runnable',
+            'stage': 'recognized'
+        }
+        yarac = yara.compile(source=yara_rule_is_pe)
+        matches = yarac.match(data=memory_dump)
+        if matches:
+            pe = pefile.PE(BytesIO(memory_dump))
+            if hex(pe.FILE_HEADER.Machine) == '0x14c':
+                headers['platform'] = 'win32'
+            if hex(pe.FILE_HEADER.Machine) == '0x8664':
+                headers['platform'] = 'win64'
+        return headers
 
     def memory_dump_cleanup(self):
         """
