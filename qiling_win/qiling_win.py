@@ -26,6 +26,7 @@ from qiling.os.windows.handle import *
 from qiling.os.windows.thread import *
 from qiling.os.windows.utils import *
 from qiling.os.windows.structs import *
+from contextlib import contextmanager
 
 from karton.core import Karton, Task, Resource
 
@@ -42,8 +43,16 @@ user32       = 'user32_dll'
 md32         = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 md64         = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 
-def timeout_handler(signal, frame):
-    raise Exception ('task timed out')
+@contextmanager
+def timeout_handler(time):
+    signal.signal(signal.SIGALRM, raise_timeout)
+    signal.alarm(time)
+    try:
+        yield
+    except TimeoutError:
+        pass
+    finally:
+        signal.signal(signal.SIGALRM, signal.SIG_IGN)
 
 def dump_executable_memory(ql) -> bool:
     """
@@ -332,43 +341,41 @@ class KartonUnpackerModule():
         sample_packed = self.write_sample_tempfile()
         pe = pefile.PE(sample_packed)
         if hex(pe.FILE_HEADER.Machine) == '0x14c':
-            # 32-bit Binary
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(self.config['timeout'])
-            try:
-                log.info(f"starting analysis of win32 executable {self.name}")
-                ql = Qiling(
-                    argv=[sample_packed],
-                    rootfs=self.config['rootfs'] + '/x86_windows',
-                    multithread=False,
-                    console=False,
-                    log_override=log,
-                    verbose=self.verbose
-                )
-                hook_apis(ql)
-                ql.hook_code(hook_asm_x86)
-                ql.run(timeout=self.config['emulator_timeout'])
-            except Exception as error:
-                log.error(error)
+            # 32-bit Binay
+            with timeout(self.config['timeout']):
+                try:
+                    log.info(f"starting analysis of win32 executable {self.name}")
+                    ql = Qiling(
+                        argv=[sample_packed],
+                        rootfs=self.config['rootfs'] + '/x86_windows',
+                        multithread=False,
+                        console=False,
+                        log_override=log,
+                        verbose=self.verbose
+                    )
+                    hook_apis(ql)
+                    ql.hook_code(hook_asm_x86)
+                    ql.run(timeout=self.config['emulator_timeout'])
+                except Exception as error:
+                    log.error(error)
         if hex(pe.FILE_HEADER.Machine) == '0x8664':
             # 64-bit Binary
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(self.config['timeout'])
-            try:
-                log.info(f"starting analysis of win64 executable {self.name}")
-                ql = Qiling(
-                    argv=[sample_packed],
-                    rootfs=self.config['rootfs'] + '/x86_windows',
-                    multithread=False,
-                    console=False,
-                    log_override=log,
-                    verbose=self.verbose
-                )
-                hook_apis(ql)
-                ql.hook_code(hook_asm_x64)
-                ql.run(timeout=self.config['emulator_timeout'])
-            except Exception as error:
-                log.error(error)
+            with timeout(self.config['timeout']):
+                try:
+                    log.info(f"starting analysis of win64 executable {self.name}")
+                    ql = Qiling(
+                        argv=[sample_packed],
+                        rootfs=self.config['rootfs'] + '/x86_windows',
+                        multithread=False,
+                        console=False,
+                        log_override=log,
+                        verbose=self.verbose
+                    )
+                    hook_apis(ql)
+                    ql.hook_code(hook_asm_x64)
+                    ql.run(timeout=self.config['emulator_timeout'])
+                except Exception as error:
+                    log.error(error)
         self.delete_sample_tempfile(sample_packed)
         return self.get_tasks()
   

@@ -7,18 +7,27 @@ import json
 import time
 import signal
 import logging
-import tempfile
 import argparse
-from karton.core import Karton, Task, Resource
+import tempfile
 import subprocess
+from contextlib import contextmanager
+from karton.core import Karton, Task, Resource
 
 log = logging.getLogger(__name__)
 
 __author__  = "c3rb3ru5"
 __version__ = "3.96"
 
-def timeout_handler(signal, frame):
-    raise Exception ('task timed out')
+@contextmanager
+def timeout_handler(time):
+    signal.signal(signal.SIGALRM, raise_timeout)
+    signal.alarm(time)
+    try:
+        yield
+    except TimeoutError:
+        pass
+    finally:
+        signal.signal(signal.SIGALRM, signal.SIG_IGN)
 
 # YARA Signature to Detect UPX Packed Executables
 yara_rule = """
@@ -70,13 +79,13 @@ class KartonUnpackerModule():
         f.close()
         command = [upx, '-d', sample_packed, '-o', sample_unpacked]
         command = subprocess.list2cmdline(command)
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(self.config['timeout'])
-        try:
-            out = subprocess.getoutput(command)
-        except Exception as error:
-            log.error(error)
-            return []
+        out = ''
+        with timeout(self.config['timeout']):
+            try:
+                out = subprocess.getoutput(command)
+            except Exception as error:
+                log.error(error)
+                return []
         if os.path.exists(sample_packed):
                 os.remove(sample_packed)
         if "Unpacked 1 file".lower() in out.lower():
