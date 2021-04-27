@@ -4,6 +4,8 @@ import os
 import sys
 import yara
 import json
+import signal
+import time
 import logging
 import tempfile
 import argparse
@@ -14,6 +16,9 @@ log = logging.getLogger(__name__)
 
 __author__  = "c3rb3ru5"
 __version__ = "3.96"
+
+def timeout_handler(signal, frame):
+    raise Exception ('task timed out')
 
 # YARA Signature to Detect UPX Packed Executables
 yara_rule = """
@@ -55,7 +60,7 @@ class KartonUnpackerModule():
             return True
         return False
 
-    def main(self) -> Task:
+    def main(self) -> list:
         log.info(f"upx unpacking {self.name}")
         upx = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'upx')
         sample_unpacked = tempfile.mktemp()
@@ -65,7 +70,13 @@ class KartonUnpackerModule():
         f.close()
         command = [upx, '-d', sample_packed, '-o', sample_unpacked]
         command = subprocess.list2cmdline(command)
-        out = subprocess.getoutput(command)
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(self.config['timeout'])
+        try:
+            out = subprocess.getoutput(command)
+        except Exception as error:
+            log.error(error)
+            return []
         if os.path.exists(sample_packed):
                 os.remove(sample_packed)
         if "Unpacked 1 file".lower() in out.lower():
@@ -97,11 +108,17 @@ if __name__ in '__main__':
         epilog=f'Author: {__author__}'
     )
     parser.add_argument('-i','--input', help='Input File', type=str, required=True)
+    parser.add_argument('--timeout', help='Task Timeout', type=int, default=30, required=False)
+    parser.add_argument('--debug', help='Debug', type=bool, default=False, required=False)
     args = parser.parse_args()
+    config = {
+        'timeout': args.timeout,
+        'debug': args.debug
+    }
     f = open(args.input, 'rb')
     sample = Resource(name=args.input, content=f.read())
     f.close()
-    module = KartonUnpackerModule(sample)
+    module = KartonUnpackerModule(sample=sample, config=config)
     if module.enabled is True:
         task = module.main()
         data = json.loads(str(task))

@@ -4,6 +4,8 @@ import os
 import sys
 import yara
 import json
+import time
+import signal
 import ctypes
 import struct
 import pefile
@@ -39,6 +41,9 @@ ntdll        = 'ntdll_dll'
 user32       = 'user32_dll'
 md32         = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 md64         = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+
+def timeout_handler(signal, frame):
+    raise Exception ('task timed out')
 
 def dump_executable_memory(ql) -> bool:
     """
@@ -319,11 +324,13 @@ class KartonUnpackerModule():
             memory_dumps[i] = bytes(memory_dumps[i])
         memory_dumps = list(set(memory_dumps))
 
-    def main(self) -> Task:
+    def main(self) -> list:
         sample_packed = self.write_sample_tempfile()
         pe = pefile.PE(sample_packed)
         if hex(pe.FILE_HEADER.Machine) == '0x14c':
             # 32-bit Binary
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(self.config['timeout'])
             try:
                 log.info(f"starting analysis of win32 executable {self.name}")
                 ql = Qiling(
@@ -336,11 +343,13 @@ class KartonUnpackerModule():
                 )
                 hook_apis(ql)
                 ql.hook_code(hook_asm_x86)
-                ql.run(timeout=self.config['timeout'])
+                ql.run(timeout=self.config['emulator_timeout'])
             except Exception as error:
                 log.error(error)
         if hex(pe.FILE_HEADER.Machine) == '0x8664':
             # 64-bit Binary
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(self.config['timeout'])
             try:
                 log.info(f"starting analysis of win64 executable {self.name}")
                 ql = Qiling(
@@ -353,7 +362,7 @@ class KartonUnpackerModule():
                 )
                 hook_apis(ql)
                 ql.hook_code(hook_asm_x64)
-                ql.run(timeout=self.config['timeout'])
+                ql.run(timeout=self.config['emulator_timeout'])
             except Exception as error:
                 log.error(error)
         return self.get_tasks()
@@ -365,12 +374,14 @@ if __name__ in '__main__':
         epilog=f'Author: {__author__}'
     )
     parser.add_argument('--input', help='Input File', type=str, required=True)
-    parser.add_argument('--timeout', help="Timeout", type=int, default=5000, required=False)
+    parser.add_argument('--emulator-timeout', help="Emulator Timeout", type=int, default=5000, required=False)
+    parser.add_argument('--timeout', help='Task Timeout', type=int, default=30, required=False)
     parser.add_argument('--debug', help='Debug', action='store_true', default=True, required=False)
     parser.add_argument('--rootfs', help='RootFS', type=str, default=None, required=True)
     args = parser.parse_args()
     config = {
             'rootfs': args.rootfs,
+            'emulator_timeout': args.emulator_timeout,
             'timeout': args.timeout,
             'debug': args.debug
     }
