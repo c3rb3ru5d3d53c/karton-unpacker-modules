@@ -4,8 +4,8 @@ import os
 import sys
 import yara
 import json
-import signal
 import time
+import signal
 import logging
 import tempfile
 import argparse

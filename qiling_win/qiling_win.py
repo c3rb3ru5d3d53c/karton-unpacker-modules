@@ -273,11 +273,15 @@ class KartonUnpackerModule():
         return False
 
     def write_sample_tempfile(self):
-        sample_packed = tempfile.mktemp()
-        f = open(sample_packed, 'wb')
+        sample_packed = tempfile.NamedTemporaryFile(delete=False)
+        f = open(sample_packed.name, 'wb')
         f.write(self.data)
         f.close()
-        return sample_packed
+        return sample_packed.name
+
+    def delete_sample_tempfile(self, file_path):
+        if os.path.isfile(file_path):
+            os.remove(file_path)
 
     def get_tasks(self):
         global memory_dumps
@@ -285,7 +289,7 @@ class KartonUnpackerModule():
         tasks = []
         if len(memory_dumps) <= 0:
             return tasks
-        print("Successfully Extracted {memory_dumps_count} Suspicious Memory Dump(s)".format(memory_dumps_count=len(memory_dumps)))
+        log.info("Successfully Extracted {memory_dumps_count} Suspicious Memory Dump(s)".format(memory_dumps_count=len(memory_dumps)))
         for memory_dump in memory_dumps:
             if self.config['debug'] is True:
                 log.debug('EXTRACTED_PAYLOAD:')
@@ -365,6 +369,7 @@ class KartonUnpackerModule():
                 ql.run(timeout=self.config['emulator_timeout'])
             except Exception as error:
                 log.error(error)
+        self.delete_sample_tempfile(sample_packed)
         return self.get_tasks()
   
 if __name__ in '__main__':
