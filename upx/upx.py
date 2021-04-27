@@ -19,7 +19,7 @@ __author__  = "c3rb3ru5"
 __version__ = "3.96"
 
 @contextmanager
-def timeout_handler(time):
+def timeout(time):
     signal.signal(signal.SIGALRM, raise_timeout)
     signal.alarm(time)
     try:

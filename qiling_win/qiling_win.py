@@ -44,7 +44,7 @@ md32         = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 md64         = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 
 @contextmanager
-def timeout_handler(time):
+def timeout(time):
     signal.signal(signal.SIGALRM, raise_timeout)
     signal.alarm(time)
     try:
