@@ -43,6 +43,9 @@ user32       = 'user32_dll'
 md32         = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 md64         = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
 
+def raise_timeout(signum, frame):
+    raise TimeoutError
+
 @contextmanager
 def timeout(time):
     signal.signal(signal.SIGALRM, raise_timeout)
@@ -94,6 +97,29 @@ class ProcessInformation(WindowsStruct):
         self.dwProcessId = [dwProcessId, self.DWORD_SIZE, 'little', int]
         self.dwThreadId  = [dwThreadId, self.DWORD_SIZE, 'little', int]
 
+class ExceptionRecord(WindowsStruct):
+    """
+    typedef struct _EXCEPTION_RECORD {
+    DWORD                    ExceptionCode;
+    DWORD                    ExceptionFlags;
+    struct _EXCEPTION_RECORD *ExceptionRecord;
+    PVOID                    ExceptionAddress;
+    DWORD                    NumberParameters;
+    ULONG_PTR                ExceptionInformation[EXCEPTION_MAXIMUM_PARAMETERS];
+    } EXCEPTION_RECORD;
+    """
+    def __init__(self, ql, ExceptionCode=None,
+        ExceptionFlags=None, ExceptionRecord=None,
+        ExceptionAddress=None, NumberParameters=None,
+        ExceptionInformation=None):
+        super().__init__(ql)
+        self.ExceptionCode = [ExceptionCode, self.DWORD_SIZE, 'little', int]
+        self.ExceptionFlags = [ExceptionFlags, self.DWORD_SIZE, 'little', int]
+        self.ExceptionRecord = [ExceptionRecord, self.POINTER_SIZE, 'little', int]
+        self.ExceptionAddress = [ExceptionAddress, self.POINTER_SIZE, 'little', int]
+        self.NumberParameters = [NumberParameters, self.DWORD_SIZE, 'little', int]
+        self.ExceptionInformation = [ExceptionInformation, self.POINTER_SIZE, 'little', int]
+
 def hook_apis(ql):
     """
     Create Windows API Hooks
@@ -104,10 +130,15 @@ def hook_apis(ql):
     ql.set_api("VirtualFree", hook_VirtualFree)
     ql.set_api("memcpy", hook_memcpy)
     ql.set_api("WriteProcessMemory", hook_WriteProcessMemory)
-    ql.set_api("Sleep", hook_Sleep)
-    ql.set_api("IsDebuggerPresent", hook_IsDebuggerPresent)
     ql.set_api("EnumWindows", hook_EnumWindows)
     ql.set_api("CopyMemory", hook_CopyMemory)
+    # Anti-Anti Debug
+    ql.set_api("Sleep", hook_Sleep)
+    ql.set_api("IsDebuggerPresent", hook_IsDebuggerPresent)
+    # Supporting Functions
+    ql.set_api("RtlUnwindEx", hook_RtlUnwindEx)
+    ql.set_api("RtlVirtualUnwind", hook_RtlVirtualUnwind)
+    ql.set_api("RtlLookupFunctionEntry", hook_RtlLookupFunctionEntry)
 
 # Anti-Anti Debug Function Hooks
 @winsdkapi(cc=STDCALL, dllname=kernel32)
@@ -119,6 +150,20 @@ def hook_Sleep(ql, address, params):
 @winsdkapi(cc=STDCALL, dllname=kernel32)
 def hook_IsDebuggerPresent(ql, address, params):
     ql.log.info('process called kernel32.IsDebuggerPresent, returning 0')
+    return 0
+
+# Supporting Functions
+
+@winsdkapi(cc=STDCALL, dllname=kernel32)
+def hook_RtlUnwindEx(ql, address, params):
+    return 0
+
+@winsdkapi(cc=STDCALL, dllname=kernel32)
+def hook_RtlVirtualUnwind(ql, address, params):
+    return 0
+
+@winsdkapi(cc=STDCALL, dllname=kernel32)
+def hook_RtlLookupFunctionEntry(ql, address, params):
     return 0
 
 # Suspicious Memory Functions

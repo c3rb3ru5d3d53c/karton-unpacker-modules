@@ -18,6 +18,9 @@ log = logging.getLogger(__name__)
 __author__  = "c3rb3ru5"
 __version__ = "3.96"
 
+def raise_timeout(signum, frame):
+    raise TimeoutError
+
 @contextmanager
 def timeout(time):
     signal.signal(signal.SIGALRM, raise_timeout)
