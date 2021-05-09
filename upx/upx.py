@@ -121,7 +121,7 @@ if __name__ in '__main__':
     )
     parser.add_argument('-i','--input', help='Input File', type=str, required=True)
     parser.add_argument('--timeout', help='Task Timeout', type=int, default=30, required=False)
-    parser.add_argument('--debug', help='Debug', type=bool, default=False, required=False)
+    parser.add_argument('--debug', help='Debug', action='store_true', default=False, required=False)
     args = parser.parse_args()
     config = {
         'timeout': args.timeout,
