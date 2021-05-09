@@ -17,6 +17,7 @@ rule IceLoaderPacker {
     strings:
         $obfuscationCode = {89 DA [0-7] B? FF 44 30 [0-17] C2 44 30 [0-8] 20 ?? 08 D0 [0-8] 88 84}
     condition:
+        uint16(0) == 0x5a4d and filesize < 800KB and
         all of them
     }
 """
@@ -54,7 +55,7 @@ class KartonUnpackerModule():
         if matches:
             start = int(matches[0].strings[0][0])
             end = start + len(matches[0].strings[0][2])
-            self.obfuscationCode = sample.content[start:end-2]
+            self.obfuscationCode = sample.content[start:end-2] # Removing the last two bytes because I use them as markor for the end of the code
             return True
         return False
 
@@ -80,7 +81,6 @@ class KartonUnpackerModule():
         """
         for section in pe.sections:
             if ".data" in str(section.Name):
-                print("[+] Done !")
                 data = section.get_data()
                 # OK this one is hardcoded, maybe I can do something about it
                 if self.config['debug'] is True:
@@ -96,8 +96,8 @@ class KartonUnpackerModule():
         for i in range(0, len(rdata), 2):
             decodedRdata.append(rdata[i])
         if self.config['debug'] is True:
-                    log.debug('Decoded RDATA section:')
-                    hexdump.hexdump(decodedRdata)
+            log.debug('Decoded RDATA section:')
+            hexdump.hexdump(decodedRdata)
         return decodedRdata
 
     def rdataDecrypt(self, decodedRdata):
@@ -119,9 +119,9 @@ class KartonUnpackerModule():
                 count = 0
                 scount += 1
                 i = lenRdata - scount
-        if self.config['debug'] is True:
-            log.debug('Decrypted RDATA section:')
-            hexdump.hexdump(payload[::-1])
+            if self.config['debug'] is True:
+                log.debug('Decrypted RDATA section:')
+                hexdump.hexdump(payload[::-1])
         return payload[::-1]
 
 
