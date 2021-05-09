@@ -1,5 +1,5 @@
-qiling==1.2.2
+qiling==1.2.3
 hexdump==3.3
 pefile==2019.4.18
-yara==1.7.7
+yara-python==4.0.5
 karton-core==4.2.0
