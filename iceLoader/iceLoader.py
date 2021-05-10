@@ -13,7 +13,7 @@ __author__  = '4rchib4ld'
 __version__ = '1.0.0'
 
 yara_rule_iceloader = """
-rule IceLoaderPacker {
+rule iceloaderpacker {
     strings:
         $obfuscationCode = {89 DA [0-7] B? FF 44 30 [0-17] C2 44 30 [0-8] 20 ?? 08 D0 [0-8] 88 84}
     condition:
@@ -119,9 +119,9 @@ class KartonUnpackerModule():
                 count = 0
                 scount += 1
                 i = lenRdata - scount
-            if self.config['debug'] is True:
-                log.debug('Decrypted RDATA section:')
-                hexdump.hexdump(payload[::-1])
+        if self.config['debug'] is True:
+            log.debug('Decrypted RDATA section:')
+            hexdump.hexdump(payload[::-1])
         return payload[::-1]
 
 
@@ -218,8 +218,7 @@ if __name__ in '__main__':
     )
     parser.add_argument('-i','--input', help='Input File', type=str, required=True)
     parser.add_argument('--rootfs', help='RootFS', type=str, default=None, required=True)
-    parser.add_argument('--timeout', help='Task Timeout', type=int, default=30, required=False)
-    parser.add_argument('--debug', help='Debug', type=bool, default=False, required=False)
+    parser.add_argument('--debug', help='Debug', action="store_true", default=False, required=False)
     args = parser.parse_args()
     f = open(args.input, 'rb')
     sample = Resource(name=args.input, content=f.read())
