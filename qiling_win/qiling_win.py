@@ -423,7 +423,7 @@ class KartonUnpackerModule():
                     log.error(error)
         self.delete_sample_tempfile(sample_packed)
         return self.get_tasks()
-  
+
 if __name__ in '__main__':
     parser = argparse.ArgumentParser(
         prog='qiling_win.py',

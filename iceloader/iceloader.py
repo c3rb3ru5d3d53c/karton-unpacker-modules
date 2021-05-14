@@ -41,7 +41,7 @@ class KartonUnpackerModule():
 
     def __init__(self, sample, config):
         self.enabled = self.yara_check(sample)
-        self.config = config       
+        self.config = config
         self.data = sample.content
         if self.config['rootfs'] is None:
             log.warn("rootfs is disabled, iceloader unpacker disabled")
@@ -69,7 +69,7 @@ class KartonUnpackerModule():
         return False
 
     def extractPayloadFromSect(self, pe, sectionName):
-        """ 
+        """
         Extracting the payload from the pe section. Different routines because of the different section that can be used
         """
         for section in pe.sections:
@@ -83,7 +83,7 @@ class KartonUnpackerModule():
                 data = section.get_data()
                 log.debug(f"Size of extracted payload section : {len(data)}")
                 return data
-    
+
     def extractDecryptionSect(self, pe, sectionName):
         """
         Extracting the payload from the pe section
@@ -151,7 +151,7 @@ class KartonUnpackerModule():
         """
         Treat the obfuscation code as a shellcode (could have used the code offset instead) and run it in a loop
         """
-        ql = Qiling(code=self.obfuscationCode, 
+        ql = Qiling(code=self.obfuscationCode,
             rootfs=self.config['rootfs'] + '/x8664_windows',
             ostype="windows",
             archtype="x8664",
@@ -176,7 +176,7 @@ class KartonUnpackerModule():
                 result = ql.reg.al
                 count += 1
                 deobfuscatedPayload.append(result)
-            
+
         except Exception as error:
             log.error(error)
 
@@ -196,7 +196,7 @@ class KartonUnpackerModule():
                 currentChar = encryptedPayload[int.from_bytes(bytes([dataSect[i % len(dataSect)]]) + bytes([dataSect[(i+1) % len(dataSect)]]), "little") + padding]
                 secondStage.append(currentChar)
             except IndexError:
-                pass   
+                pass
             count += 1
             if count == step:
                 padding += step
@@ -227,7 +227,7 @@ class KartonUnpackerModule():
         else:
             extractedPayload = self.extractPayloadFromSect(pe, payloadSection)
             extractedDecryptionSection, extractedValue  = self.extractDecryptionSect(pe, dataSectionName)
-        
+
         return extractedPayload, extractedDecryptionSection, extractedValue
 
 
@@ -265,8 +265,7 @@ class KartonUnpackerModule():
         task = Task(
             headers={
                 'type': 'sample',
-                'kind': 'runnable',
-                'stage': 'recognized'
+                'kind': 'raw'
             },
             payload={
                 'parent': Resource(name='sample', content=self.data),      # Set Parent Data (Packed Sample)

@@ -111,7 +111,7 @@ class KartonUnpackerModule():
             return [task]
         log.error(f"failed to unpack: {self.sample_packed.name}")
         return []
-        
+
 if __name__ in '__main__':
     logging.basicConfig(level=logging.DEBUG)
     parser = argparse.ArgumentParser(
