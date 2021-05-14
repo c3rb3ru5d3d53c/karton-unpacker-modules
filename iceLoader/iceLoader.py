@@ -17,6 +17,7 @@ rule iceloaderpacker {
     meta:
         author      = "4rchib4ld"
         description = "Iceloader"
+        reference   = "https://4rchib4ld.github.io/blog/HoneymoonOnIceloader/"
         type        = "malware.loader"
         created     = "2021-05-14"
         os          = "windows"
@@ -255,7 +256,7 @@ class KartonUnpackerModule():
     def main(self) -> list:
         # Perform Operations on self.data to unpack the sample
         pe = pefile.PE(data = self.data)
-        #Extracting data from data and rdata
+
         extractedPayload, extractedDecryptionSection, extractedValue = self.selectingSections(pe)
         decrementationCounter = extractedValue // 512 # that's how it is calculated
         obfuscatedPayload   = self.payloadDecrypt(self.payloadDecode(extractedPayload), decrementationCounter)
