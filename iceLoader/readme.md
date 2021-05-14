@@ -1,3 +1,3 @@
-# IceLoader Unpacker
+# Iceloader Unpacker
 
-Unpacks IceLoader executables using the [Qiling Framework](https://qiling.io/).
+Unpacks Iceloader executables using the [Qiling Framework](https://qiling.io/).

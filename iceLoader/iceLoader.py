@@ -14,10 +14,18 @@ __version__ = '1.0.0'
 
 yara_rule_iceloader = """
 rule iceloaderpacker {
+    meta:
+        author      = "4rchib4ld"
+        description = "Iceloader"
+        type        = "malware.loader"
+        created     = "2021-05-14"
+        os          = "windows"
+        tlp         = "white"
+        rev         = 1
     strings:
-        $obfuscationCode = {89 DA [0-7] B? FF 44 30 [0-17] C2 44 30 [0-8] 20 ?? 08 D0 [0-8] 88 84}
+        $obfuscationCode = {89 DA [0-7] B? FF 44 30 [0-17] C2 44 30 [0-8] 20 ?? 08 D0 [0-8] 88 84} // This code is used for deobfuscation
     condition:
-        uint16(0) == 0x5a4d and filesize < 800KB and
+        uint16(0) == 0x5a4d and filesize < 800KB and // We only want PE files
         all of them
     }
 """
@@ -59,73 +67,86 @@ class KartonUnpackerModule():
             return True
         return False
 
-    def extractRdataSect(self, pe):
+    def extractPayloadFromSect(self, pe, sectionName):
         """ 
-        Extracting the payload from the .rdata section
-        """
-        startOfDebugDirectory = pe.OPTIONAL_HEADER.DATA_DIRECTORY[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_DEBUG"]].VirtualAddress
-        for section in pe.sections:
-            if ".rdata" in str(section.Name):
-                rdata = section.get_data()
-                rdata = rdata[0x80:]
-                RdataVirtualAddress = section.VirtualAddress
-                endOfPayload = startOfDebugDirectory - RdataVirtualAddress - 0x80
-                if self.config['debug'] is True:
-                    log.debug('EXTRACTED RDATA section:')
-                    hexdump.hexdump(rdata[:endOfPayload])
-                return rdata[:endOfPayload]
-    
-    def extractDataSect(self, pe):
-        """
-        Extracting the payload from the .data section
+        Extracting the payload from the pe section. Different routines because of the different section that can be used
         """
         for section in pe.sections:
-            if ".data" in str(section.Name):
+            if sectionName == section.Name:
+                if ".rdata" in str(sectionName):
+                    startOfDebugDirectory = pe.OPTIONAL_HEADER.DATA_DIRECTORY[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_DEBUG"]].VirtualAddress
+                    rdata = section.get_data()
+                    RdataVirtualAddress = section.VirtualAddress
+                    endOfPayload = startOfDebugDirectory - RdataVirtualAddress
+                    return rdata[:endOfPayload]
                 data = section.get_data()
-                # OK this one is hardcoded, maybe I can do something about it
-                if self.config['debug'] is True:
-                    log.debug('EXTRACTED DATA section:')
-                    hexdump.hexdump(data[16:16400])
-                return data[16:16400]
+                log.debug(f"Size of extracted payload section : {len(data)}")
+                return data
+    
+    def extractDecryptionSect(self, pe, sectionName):
+        """
+        Extracting the payload from the pe section
 
-    def rdataDecode(self, rdata):
         """
-        Decoding .rdata. Making it ready for the next stage
-        """
-        decodedRdata = bytearray()
-        for i in range(0, len(rdata), 2):
-            decodedRdata.append(rdata[i])
-        if self.config['debug'] is True:
-            log.debug('Decoded RDATA section:')
-            hexdump.hexdump(decodedRdata)
-        return decodedRdata
+        for section in pe.sections:
+            if sectionName == section.Name:
+                data = section.get_data()
+                endoffset = 16400 # hardcoded value, but it's always the same
+                extractedValue = int.from_bytes(data[:4], 'little')
+                data =  data[16:endoffset]
+                log.debug(f"Size of the extracted decryption section : {len(data)}\nExtracted value : {extractedValue}")
+                return data, extractedValue
 
-    def rdataDecrypt(self, decodedRdata):
+    def payloadDecode(self, data):
         """
-        Starting from the end for the data, and a byte every 20 bytes. Then it loops again, but from len(data)-1 and so on
+        Decoding the payload. Making it ready for the next stage
+        """
+        decodedData = bytearray()
+        for i in range(0, len(data), 2):
+            decodedData.append(data[i])
+        log.debug(f"Size decoded payload section: {len(decodedData)}")
+        return decodedData
+
+    def payloadDecrypt(self, decodedPayload, decrementationCounter):
+        """
+        Starting from the end for the decodedPayload, and a byte every n bytes. Then it loops again, but from len(data)-1 and so on
         """
         payload = bytearray()
-        decrem = decodedRdata[-1] # That's where the value is located
         count = 0
         scount = 0
-        lenRdata = len(decodedRdata) - 1
-        i = lenRdata
-        while scount != decrem:
-            payload.append(decodedRdata[i])
-            i -= decrem
+        payloadSize = len(decodedPayload) - 1
+        i = payloadSize
+        while scount != decrementationCounter:
+            try:
+                payload.append(decodedPayload[i])
+            except:
+                pass
+            i -= decrementationCounter
             count = count + 1
             if count == 512:
-                i = len(decodedRdata) - 1
                 count = 0
                 scount += 1
-                i = lenRdata - scount
-        if self.config['debug'] is True:
-            log.debug('Decrypted RDATA section:')
-            hexdump.hexdump(payload[::-1])
+                i = payloadSize - scount
+
+        log.debug(f"Size of the decrypted payload section : {len(payload)}")
         return payload[::-1]
 
+    def gettingObfuscationCode(file, yaraRule):
+        """
+        Retrieving the code used for obfuscation using a Yara rule
+        """
+        rules = yara.compile(filepath=yaraRule)
+        f = open(file, "rb")
+        matches = rules.match(data=f.read())
+        f.close()
+        if matches:
+            obfuscationCode = matches[0].strings[0][2]
+        else:
+            obfuscationCode = 0
+        log.debug(f"Obfuscation code : {obfuscationCode}")
+        return obfuscationCode
 
-    def runObfuscationCode(self, decodedRdata):
+    def runObfuscationCode(self, obfuscatedPayload):
         """
         Treat the obfuscation code as a shellcode (could have used the code offset instead) and run it in a loop
         """
@@ -141,7 +162,7 @@ class KartonUnpackerModule():
             deobfuscatedPayload = bytearray()
             count = 0
             key = 1 # Maybe this will change ?
-            for byte in decodedRdata:
+            for byte in obfuscatedPayload:
                 if count == 512:
                     key += 1
                     count = 0
@@ -158,9 +179,7 @@ class KartonUnpackerModule():
         except Exception as error:
             log.error(error)
 
-        if self.config['debug'] is True:
-            log.debug('Deobfuscated Payload :')
-            hexdump.hexdump(deobfuscatedPayload[::1])
+        log.debug(f"Size of deobfuscated payload : {len(deobfuscatedPayload)}")
         return deobfuscatedPayload[::1]
 
     def decryptSecondStage(self, encryptedPayload, dataSect):
@@ -182,20 +201,68 @@ class KartonUnpackerModule():
                 padding += step
                 count = 0
         secondStage = bytes(secondStage) # Bytearray -> bytes, needed by Karton
-        if self.config['debug'] is True:
-            log.debug('Second Stage :')
-            hexdump.hexdump(secondStage)
+        log.debug(f"Size of the decrypted second stage : {len(secondStage)}")
         return secondStage
+
+    def selectingSections(self, pe):
+        """
+        Sorting the biggest region of the file. The biggest is the packed executable, the second one the data used for decryption
+        """
+        sort = {}
+        for section in pe.sections:
+            if not ".text" in str(section.Name) and not ".data" in str(section.Name): # we don't care about .text
+                sort[section.Name] = section.Misc_VirtualSize
+            if ".data" in str(section.Name):
+                dataSectionSize = section.Misc_VirtualSize
+                dataSectionName = section.Name
+        sortedSection = sorted(sort.items(), key=lambda x: x[1], reverse=True)
+        payloadSection = sortedSection[0][0]
+        payloadSectionSize = sortedSection[0][1]
+        log.debug(f"Biggest section is : {payloadSection} with size {payloadSectionSize}")
+        if dataSectionSize > (payloadSectionSize * 5): #means that everything is in .data
+            log.debug("Everything is in .data")
+            dataSect = self.extractPayloadFromSect(pe, dataSectionName)
+            extractedPayload, extractedDecryptionSection, extractedValue = self.scanningData(dataSect)
+        else:
+            extractedPayload = self.extractPayloadFromSect(pe, payloadSection)
+            extractedDecryptionSection, extractedValue  = self.extractDecryptionSect(pe, dataSectionName)
+        
+        return extractedPayload, extractedDecryptionSection, extractedValue
+
+
+    def scanningData(self, data):
+        """
+        Sometimes everything is in the .data section, so we need to parse it in order to get the data we want. I use a Yara rule in order to find the markor
+        """
+        markorYara = """
+        rule  findMarkor
+        {
+        strings:
+            $markor = { 00 ?? ?? 00 ?? ?? 00 00 00 00 00 00 00 00 00 }
+        condition:
+            all of them
+        }
+        """
+        yarac = yara.compile(source=markorYara)
+        matches = yarac.match(data=data)
+        extractedValue = int.from_bytes(matches[0].strings[0][2][:4], 'little')
+        offset = matches[0].strings[0][0]
+        payload = data[:offset]
+        dataSect = data[offset+16:offset+16400] #skipping the 16bytes that are used as a delimeter
+        log.debug(f"extracted payload size : {payload}\n extracted data section size : {dataSect} \n extracted value : {extractedValue}")
+        return payload, dataSect, extractedValue
 
     def main(self) -> list:
         # Perform Operations on self.data to unpack the sample
         pe = pefile.PE(data = self.data)
         #Extracting data from data and rdata
-        rdata = self.extractRdataSect(pe)
-        data = self.extractDataSect(pe)
-        decryptedRdata = self.rdataDecrypt(self.rdataDecode(rdata))
-        encryptedPayload = self.runObfuscationCode(decryptedRdata)
-        unpacked_data = self.decryptSecondStage(encryptedPayload, data)
+        extractedPayload, extractedDecryptionSection, extractedValue = self.selectingSections(pe)
+        decrementationCounter = extractedValue // 512 # that's how it is calculated
+        obfuscatedPayload   = self.payloadDecrypt(self.payloadDecode(extractedPayload), decrementationCounter)
+        deobfuscatedPayload = self.runObfuscationCode(obfuscatedPayload)
+        unpackedExecutable  = self.decryptSecondStage(deobfuscatedPayload, extractedDecryptionSection)
+        with open("test.bin", "wb") as f:
+            f.write(unpackedExecutable)
         task = Task(
             headers={
                 'type': 'sample',
@@ -204,7 +271,7 @@ class KartonUnpackerModule():
             },
             payload={
                 'parent': Resource(name='sample', content=self.data),      # Set Parent Data (Packed Sample)
-                'sample': Resource(name='unpacked', content=unpacked_data) # Set Child Data (Unpacked Sample)
+                'sample': Resource(name='unpacked', content=unpackedExecutable) # Set Child Data (Unpacked Sample)
             }
         )
         # A list of tasks must be returned, as there can be more than one unpacked child
