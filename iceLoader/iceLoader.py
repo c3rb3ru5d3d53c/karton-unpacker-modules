@@ -28,7 +28,7 @@ rule iceloaderpacker {
     condition:
         uint16(0) == 0x5a4d and filesize < 800KB and // We only want PE files
         all of them
-    }
+}
 """
 
 log = logging.getLogger(__name__) # Setup Logging
@@ -262,8 +262,6 @@ class KartonUnpackerModule():
         obfuscatedPayload   = self.payloadDecrypt(self.payloadDecode(extractedPayload), decrementationCounter)
         deobfuscatedPayload = self.runObfuscationCode(obfuscatedPayload)
         unpackedExecutable  = self.decryptSecondStage(deobfuscatedPayload, extractedDecryptionSection)
-        with open("test.bin", "wb") as f:
-            f.write(unpackedExecutable)
         task = Task(
             headers={
                 'type': 'sample',
