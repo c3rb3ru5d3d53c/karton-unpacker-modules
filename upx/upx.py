@@ -109,7 +109,7 @@ class KartonUnpackerModule():
                 }
             )
             return [task]
-        log.error(f"failed to unpack: {self.sample_packed.name}")
+        log.error(f"failed to unpack: {self.name}")
         return []
 
 if __name__ in '__main__':
