@@ -37,14 +37,16 @@ yara_rule = """
 rule upx{
     strings:
         $mz      = "MZ"
+        $elf0    = {7f}
+        $elf1    = "ELF"
         $upx1    = {55505830000000}
         $upx2    = {55505831000000}
         $upx_sig = "UPX!"
     condition:
-        $mz at 0 and
-        $upx1 in (0..1024) and
-        $upx2 in (0..1024) and
-        $upx_sig in (0..1024)
+        ((($elf0 at 0) and ($elf1 at 1)) or ($mz at 0)) and
+        (($upx1 in (0..1024)) or
+        ($upx2 in (0..1024)) or
+        ($upx_sig in (0..1024)))
 }
 """
 
